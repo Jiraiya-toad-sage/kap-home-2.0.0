@@ -1,0 +1,24 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+@layer base {
+  .prose {
+    @apply text-gray-700 leading-relaxed;
+  }
+  .prose p {
+    @apply mb-2;
+  }
+  .prose strong {
+    @apply font-bold text-gray-900;
+  }
+  .prose ul {
+    @apply list-disc pl-4 mb-2;
+  }
+  .prose li {
+    @apply mb-1;
+  }
+}
