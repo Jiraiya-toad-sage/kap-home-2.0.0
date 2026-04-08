@@ -99,7 +99,12 @@ export default function ChatBot({ onNavigate }: ChatBotProps) {
         trainingExamples: trainingData
       };
 
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const apiKey = process.env.GEMINI_API_KEY || (import.meta as any).env?.VITE_GEMINI_API_KEY;
+      if (!apiKey) {
+        throw new Error("Gemini API Key is not configured. Please add GEMINI_API_KEY to your secrets.");
+      }
+
+      const ai = new GoogleGenAI({ apiKey });
       const model = ai.models.generateContent({
         model: "gemini-3-flash-preview",
         contents: [
