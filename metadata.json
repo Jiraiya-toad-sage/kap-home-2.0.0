@@ -1,0 +1,5 @@
+{
+  "name": "KAP Genuine",
+  "description": "Serialized inventory management system with unique QR code tracking, bulk generation, and customer ledger.",
+  "requestFramePermissions": ["camera"]
+}

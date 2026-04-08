@@ -1,0 +1,88 @@
+{
+  "entities": {
+    "Product": {
+      "title": "Product",
+      "description": "Master list of product types (SKUs).",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Product name" },
+        "price": { "type": "number", "description": "Base price" },
+        "units": { "type": "number", "description": "Number of units (optional)" },
+        "description": { "type": "string", "description": "Product description (optional)" },
+        "image": { "type": "string", "description": "Base64 encoded product image" }
+      },
+      "required": ["name", "price"]
+    },
+    "Item": {
+      "title": "Item",
+      "description": "Individual serialized items with unique QR codes.",
+      "type": "object",
+      "properties": {
+        "qrCode": { "type": "string", "description": "Unique QR code" },
+        "manualCode": { "type": "string", "description": "Unique manual entry code" },
+        "skuId": { "type": "string", "description": "Reference to Product ID" },
+        "batchId": { "type": "string", "description": "Reference to Batch ID" },
+        "status": { "type": "string", "enum": ["in", "out"], "description": "Inventory status" },
+        "lastUpdated": { "type": "string", "format": "date-time", "description": "Last status update" }
+      },
+      "required": ["qrCode", "manualCode", "skuId", "status"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Sales order records.",
+      "type": "object",
+      "properties": {
+        "customerId": { "type": "string", "description": "Reference to Customer ID" },
+        "items": { "type": "array", "items": { "type": "string" }, "description": "List of Item IDs" },
+        "totalAmount": { "type": "number", "description": "Total order value" },
+        "amountReceived": { "type": "number", "description": "Amount paid by customer" },
+        "status": { "type": "string", "enum": ["pending", "completed"], "description": "Order status" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Order creation time" }
+      },
+      "required": ["customerId", "items", "totalAmount", "status", "createdAt"]
+    },
+    "Customer": {
+      "title": "Customer",
+      "description": "Retail store or customer record.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Customer/Store name" },
+        "balance": { "type": "number", "description": "Current ledger balance" }
+      },
+      "required": ["name", "balance"]
+    },
+    "LedgerEntry": {
+      "title": "LedgerEntry",
+      "description": "Transaction record for customer ledger.",
+      "type": "object",
+      "properties": {
+        "customerId": { "type": "string", "description": "Reference to Customer ID" },
+        "orderId": { "type": "string", "description": "Optional reference to Order ID" },
+        "amount": { "type": "number", "description": "Transaction amount" },
+        "type": { "type": "string", "enum": ["debit", "credit"], "description": "Transaction type" },
+        "timestamp": { "type": "string", "format": "date-time", "description": "Transaction time" }
+      },
+      "required": ["customerId", "amount", "type", "timestamp"]
+    },
+    "Batch": {
+      "title": "Batch",
+      "description": "History of bulk generated QR code batches.",
+      "type": "object",
+      "properties": {
+        "productId": { "type": "string", "description": "Reference to Product ID" },
+        "productName": { "type": "string", "description": "Name of the product" },
+        "count": { "type": "number", "description": "Number of items generated" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Generation time" }
+      },
+      "required": ["productId", "productName", "count", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/products/{productId}": { "schema": "Product", "description": "Product master data" },
+    "/items/{itemId}": { "schema": "Item", "description": "Serialized items" },
+    "/orders/{orderId}": { "schema": "Order", "description": "Sales orders" },
+    "/customers/{customerId}": { "schema": "Customer", "description": "Customer profiles" },
+    "/ledger/{entryId}": { "schema": "LedgerEntry", "description": "Ledger transactions" },
+    "/batches/{batchId}": { "schema": "Batch", "description": "Bulk generation batches" }
+  }
+}

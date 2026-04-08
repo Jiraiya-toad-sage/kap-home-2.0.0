@@ -1,0 +1,255 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    // Collection: products
+    // Document ID: productId
+    // Fields:
+    //   - name: string (required)
+    //   - price: number (required)
+    //   - description: string (optional)
+    //
+    // Collection: items
+    // Document ID: itemId
+    // Fields:
+    //   - qrCode: string (required, unique)
+    //   - manualCode: string (required, unique)
+    //   - skuId: string (required)
+    //   - status: string (required, enum: ['in', 'out'])
+    //   - lastUpdated: timestamp (required)
+    //
+    // Collection: orders
+    // Document ID: orderId
+    // Fields:
+    //   - customerId: string (required)
+    //   - items: list (required, list of item IDs)
+    //   - totalAmount: number (required)
+    //   - amountReceived: number (required)
+    //   - status: string (required, enum: ['confirmed', 'delivered'])
+    //   - createdAt: timestamp (required)
+    //
+    // Collection: customers
+    // Document ID: customerId
+    // Fields:
+    //   - name: string (required)
+    //   - balance: number (required)
+    //
+    // Collection: ledger
+    // Document ID: entryId
+    // Fields:
+    //   - customerId: string (required)
+    //   - orderId: string (optional)
+    //   - amount: number (required)
+    //   - type: string (required, enum: ['debit', 'credit'])
+    //   - timestamp: timestamp (required)
+    //
+    // Collection: batches
+    // Document ID: batchId
+    // Fields:
+    //   - productId: string (required)
+    //   - productName: string (required)
+    //   - count: number (required)
+    //   - createdAt: timestamp (required)
+    //
+    // Collection: chatbot_training
+    // Document ID: trainingId
+    // Fields:
+    //   - query: string (required)
+    //   - expectedResponse: string (optional)
+    //   - optimizedIntent: string (optional)
+    //   - createdAt: timestamp (required)
+    //
+    // Collection: unsolved_queries
+    // Document ID: queryId
+    // Fields:
+    //   - query: string (required)
+    //   - timestamp: timestamp (required)
+    //   - status: string (required, enum: ['pending', 'resolved'])
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && (
+        (request.auth.token.email == "deveshkapoork@gmail.com" && request.auth.token.email_verified == true) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'master-admin'])
+      );
+    }
+
+    function isMasterAdmin() {
+      return isAuthenticated() && (
+        (request.auth.token.email == "deveshkapoork@gmail.com" && request.auth.token.email_verified == true) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'master-admin')
+      );
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+    function isValidProduct(data) {
+      return hasRequiredFields(['name', 'price']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.price is number && data.price >= 0 &&
+             (!('units' in data) || (data.units is number && data.units >= 0)) &&
+             (!('description' in data) || (data.description is string && data.description.size() < 1000)) &&
+             (!('image' in data) || (data.image is string && data.image.size() < 800000)) &&
+             (!('partNumber' in data) || (data.partNumber is string && data.partNumber.size() < 50));
+    }
+
+    function isValidUser(data) {
+      return hasRequiredFields(['name', 'email', 'role', 'createdAt']) &&
+             hasOnlyAllowedFields(['name', 'email', 'role', 'createdAt', 'lastSeen']) &&
+             data.name is string && data.email is string &&
+             data.role in ['master-admin', 'admin', 'user'] &&
+             data.createdAt is timestamp &&
+             (!('lastSeen' in data) || data.lastSeen is timestamp);
+    }
+
+    function isValidItem(data) {
+      return hasRequiredFields(['qrCode', 'skuId', 'status', 'lastUpdated']) &&
+             data.qrCode is string &&
+             data.skuId is string &&
+             data.status in ['in', 'out'] &&
+             data.lastUpdated is timestamp &&
+             (!('userId' in data) || data.userId is string);
+    }
+
+    function isValidBatch(data) {
+      return hasRequiredFields(['productId', 'productName', 'count', 'createdAt']) &&
+             hasOnlyAllowedFields(['productId', 'productName', 'count', 'createdAt', 'userId']) &&
+             data.productId is string &&
+             data.productName is string && data.productName.size() > 0 && data.productName.size() < 100 &&
+             data.count is number && data.count > 0 &&
+             data.createdAt is timestamp &&
+             (!('userId' in data) || data.userId is string);
+    }
+
+    function isValidTrainingCase(data) {
+      return hasRequiredFields(['query', 'createdAt']) &&
+             hasOnlyAllowedFields(['query', 'expectedResponse', 'optimizedIntent', 'createdAt']) &&
+             data.query is string && data.query.size() > 0 && data.query.size() < 1000 &&
+             (!('expectedResponse' in data) || (data.expectedResponse is string && data.expectedResponse.size() < 2000)) &&
+             (!('optimizedIntent' in data) || (data.optimizedIntent is string && data.optimizedIntent.size() < 2000)) &&
+             (data.keys().hasAny(['expectedResponse', 'optimizedIntent'])) &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidUnsolvedQuery(data) {
+      return hasRequiredFields(['query', 'timestamp', 'status']) &&
+             hasOnlyAllowedFields(['query', 'timestamp', 'status']) &&
+             data.query is string && data.query.size() > 0 &&
+             data.timestamp is timestamp &&
+             data.status in ['pending', 'resolved'];
+    }
+
+    function isValidOrder(data) {
+      return data.customerId is string &&
+             data.items is list && data.items.size() <= 1000 &&
+             data.totalAmount is number && data.totalAmount >= 0 &&
+             data.amountReceived is number && data.amountReceived >= 0 &&
+             data.amountReceived <= data.totalAmount &&
+             data.status in ['confirmed', 'delivered'] &&
+             data.createdAt is timestamp &&
+             (!('userId' in data) || data.userId is string);
+    }
+
+    function isValidCustomer(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.balance is number &&
+             (!('userId' in data) || data.userId is string);
+    }
+
+    function isValidLedgerEntry(data) {
+      return data.customerId is string &&
+             data.amount is number && data.amount >= 0 &&
+             data.type in ['debit', 'credit'] &&
+             data.timestamp is timestamp &&
+             (!('userId' in data) || data.userId is string);
+    }
+
+    // ===============================================================
+    // Collection Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (request.auth.uid == userId || isMasterAdmin());
+      allow create: if isAuthenticated() && request.auth.uid == userId && 
+                    isValidUser(request.resource.data) &&
+                    (request.resource.data.role == 'user' || isMasterAdmin());
+      allow update: if isAuthenticated() && (
+                      (isMasterAdmin() && isValidUser(request.resource.data)) ||
+                      (request.auth.uid == userId && 
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastSeen']) &&
+                       request.resource.data.lastSeen is timestamp)
+                    );
+    }
+
+    match /products/{productId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /items/{itemId} {
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated() && isValidItem(request.resource.data) && 
+                    request.resource.data.userId == request.auth.uid;
+      allow update: if isAuthenticated() && isValidItem(request.resource.data) && 
+                    resource.data.userId == request.auth.uid;
+    }
+
+    match /orders/{orderId} {
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated() && isValidOrder(request.resource.data) && 
+                    request.resource.data.userId == request.auth.uid;
+      allow update: if isAuthenticated() && isValidOrder(request.resource.data) && 
+                    resource.data.userId == request.auth.uid;
+    }
+
+    match /customers/{customerId} {
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create, update: if isAuthenticated() && isValidCustomer(request.resource.data) && 
+                            request.resource.data.userId == request.auth.uid;
+      allow delete: if isMasterAdmin();
+    }
+
+    match /ledger/{entryId} {
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated() && isValidLedgerEntry(request.resource.data) && 
+                    request.resource.data.userId == request.auth.uid;
+    }
+
+    match /batches/{batchId} {
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated() && isValidBatch(request.resource.data) && 
+                    request.resource.data.userId == request.auth.uid;
+    }
+
+    match /chatbot_training/{trainingId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isMasterAdmin() && isValidTrainingCase(request.resource.data);
+    }
+
+    match /unsolved_queries/{queryId} {
+      allow read: if isMasterAdmin();
+      allow create: if isAuthenticated() && isValidUnsolvedQuery(request.resource.data);
+      allow update, delete: if isMasterAdmin() && isValidUnsolvedQuery(request.resource.data);
+    }
+  }
+}
