@@ -100,8 +100,8 @@ export default function ChatBot({ onNavigate }: ChatBotProps) {
       };
 
       const apiKey = (import.meta as any).env?.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
-      if (!apiKey) {
-        throw new Error("Gemini API Key is not configured. Please add GEMINI_API_KEY to your secrets in AI Studio.");
+      if (!apiKey || apiKey === 'MISSING_KEY') {
+        throw new Error("KAP_GENUINE_ERROR_001: Gemini API Key is not configured. Please ensure GEMINI_API_KEY is added to your Secrets in AI Studio and then REFRESH the page.");
       }
 
       const ai = new GoogleGenAI({ apiKey });
